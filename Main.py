@@ -41,7 +41,8 @@ class Window:
                            'Grayscale', 'Binary', 'Adaptive_Threshold',
                            'Color_Threshold',
                            'Smooth', 'Sharp', 'Blobs', 'Filter',
-                           'Erosion', 'Dilatation'
+                           'Erosion', 'Dilatation',
+                           'Morphology',
                            )
         tasks.grid(row=1, column=2, padx=2, pady=1)
         self.addButton = Button(toolbar, text="Add", command=self.add_task)
@@ -186,6 +187,13 @@ class Window:
             defaults = [
                 'size=3',
                 'type=cross'
+            ]
+            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
+        elif task == 'Morphology':
+            defaults = [
+                'operation=opening',  # opening | closing | gradient | tophat | blackhat | hitmiss
+                'type=cross',  # rect | cross | ellipse
+                'ksize=5'  # 2n + 1
             ]
             self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
 
@@ -424,7 +432,7 @@ class Window:
         for key, value in kwargs.items():
             if 'size' in key:
                 dilatation_size = int(float(value))
-            if 'type' in key:
+            elif 'type' in key:
                 if value == 'rect':
                     dilatation_type = cv2.MORPH_RECT
                 elif value == 'cross':
@@ -461,47 +469,155 @@ class Window:
         self.modifiedPhoto = photo
         return color_threshold_mask
 
-    def contour(self, image):
-        image = image.filter(ImageFilter.CONTOUR)
-        photo = self.imageToBytes(image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
-        return image
+    def morphology(self, image, **kwargs):
+        # https://docs.opencv.org/4.2.0/d3/dbe/tutorial_opening_closing_hats.html
+        operation = cv2.MORPH_OPEN
+        morph_type = cv2.MORPH_CROSS
+        kernel_size = 5
+        kernel = None
+        for key, value in kwargs.items():
+            if 'operation' in key:
+                if value == 'opening':
+                    operation = cv2.MORPH_OPEN
+                elif value == 'closing':
+                    operation = cv2.MORPH_CLOSE
+                elif value == 'gradient':
+                    operation = cv2.MORPH_GRADIENT
+                elif value == 'blackhat':
+                    operation = cv2.MORPH_BLACKHAT
+                elif value == 'tophat':
+                    operation = cv2.MORPH_TOPHAT
+                elif value == 'hitmiss':
+                    operation = cv2.MORPH_HITMISS
+            elif 'type' in key:
+                if value == 'rect':
+                    morph_type = cv2.MORPH_RECT
+                elif value == 'cross':
+                    morph_type = cv2.MORPH_CROSS
+                elif value == 'ellipse':
+                    morph_type = cv2.MORPH_ELLIPSE
+            elif 'ksize' in key:
+                kernel_size = int(float(value))
+            elif 'kernel' in key:
+                if type(value) is list:
+                    kernel = value
+                else:
+                    if '[' in value and ']' in value:
+                        kernel = self.get_kernel(**{'data': value})
+                    elif 'ones' in value or 'zeros' in value:
+                        kernel = self.get_kernel(**{'type': value})
+                    else:
+                        kernel_ = self.get_kernel(**{'name': value})
+                        kernel = kernel_  # check valid kernel
+        if kernel is None:
+            kernel = cv2.getStructuringElement(morph_type, (2 * kernel_size + 1, 2 * kernel_size + 1),
+                                            (kernel_size, kernel_size))
 
-    def detail(self, image):
-        image = image.filter(ImageFilter.DETAIL)
-        photo = self.imageToBytes(image)
+        morph_image = cv2.morphologyEx(image, operation, kernel)
+        photo = self.arrayToImage(morph_image)
         self.modifiedImageView["image"] = photo
         self.modifiedPhoto = photo
-        return image
+        return morph_image
 
-    def edge_enhance(self, image):
-        image = image.filter(ImageFilter.EDGE_ENHANCE)
-        photo = self.imageToBytes(image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
-        return image
+    def draw_edges(self, image, **kwargs):
+        # https://docs.opencv.org/4.2.0/d2/d2c/tutorial_sobel_derivatives.html
+        # https://docs.opencv.org/4.2.0/d5/db5/tutorial_laplace_operator.html
+        # https://docs.opencv.org/4.2.0/da/d5c/tutorial_canny_detector.html
 
-    def edge_enhance_more(self, image):
-        image = image.filter(ImageFilter.EDGE_ENHANCE_MORE)
-        photo = self.imageToBytes(image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
-        return image
+        operator = 'canny'
+        ddepth = -1
+        ksize = 3
+        scale = 1
+        delta = 0
+        border_type = cv2.BORDER_DEFAULT
+        smooth = False
+        smooth_filter = 'gaussian3'
+        ratio = 3
+        threshold = 60
+        threshold1, threshold2 = threshold, threshold * ratio
 
-    def emboss(self, image):
-        image = image.filter(ImageFilter.EMBOSS)
-        photo = self.imageToBytes(image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
-        return image
+        for key, value in kwargs.items():
+            if 'operator' in key:
+                operator = value
+            elif 'ksize' in key:
+                ksize = int(value)
+            elif 'smooth' in key:
+                smooth = True
+                smooth_filter = value
+            elif 'scale' in key:
+                scale = int(value)
+            elif 'threshold' in key:
+                ratio:int = int(kwargs['ratio']) or ratio
+                threshold = int(value)
+                threshold1, threshold2 = threshold, threshold * ratio
+            elif 'threshold1' in key:
+                threshold1 = int(value)
+                threshold2 = int(kwargs['threshold2'])
+            elif 'ratio' in key:
+                threshold1 = int(kwargs['threshold1'])
+                threshold2 = threshold1 * int(value)
 
-    def find_edges(self, image):
-        image = image.filter(ImageFilter.FIND_EDGES)
-        photo = self.imageToBytes(image)
+        if smooth:
+            m = re.search(r'(\w+)(\d*)', smooth_filter, re.I)
+            filter = m.group(1)
+            filter_ksize = 3
+            if not m.group(2) == '':
+                filter_ksize = int(m.group(2))
+            image = self.smooth(image, **{'ksize': filter_ksize, 'filter': filter})
+
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        if operator == 'sobel':
+            grad_x = cv2.Sobel(gray_image, ddepth, 1, 0, ksize=ksize, scale=scale,
+                               delta=delta, borderType=border_type)
+            grad_y = cv2.Sobel(gray_image, ddepth, 0, 1, ksize=ksize, scale=scale,
+                               delta=delta, borderType=border_type)
+            abs_grad_x = cv2.convertScaleAbs(grad_x)
+            abs_grad_y = cv2.convertScaleAbs(grad_y)
+            edges = cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
+        elif operator == 'scharr':
+            grad_x = cv2.Scharr(gray_image, ddepth, 1, 0, scale=scale,
+                                delta=delta, borderType=border_type)
+            grad_y = cv2.Scharr(gray_image, ddepth, 0, 1, scale=scale,
+                                delta=delta, borderType=border_type)
+            abs_grad_x = cv2.convertScaleAbs(grad_x)
+            abs_grad_y = cv2.convertScaleAbs(grad_y)
+            edges = cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
+        elif operator == 'laplacian':
+            grad = cv2.Laplacian(gray_image, ddepth, ksize=ksize)
+            edges = cv2.convertScaleAbs(grad)
+        else:
+            # canny operator
+            im_edges = cv2.Canny(gray_image, threshold1, threshold2, ksize)
+            mask = im_edges != 0
+            edges = image * (mask[:, :, None].astype(image.dtype))
+
+        photo = self.arrayToImage(edges)
         self.modifiedImageView["image"] = photo
         self.modifiedPhoto = photo
-        return image
+        return edges
+
+    def draw_convex_hull(self, image, **kwargs):
+        # https://docs.opencv.org/4.2.0/d7/d1d/tutorial_hull.html
+        threshold = 40
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        canny_output = cv2.Canny(gray_image, threshold, threshold * 2)
+        contours, _ = cv2.findContours(canny_output, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        hull_list = []
+        for i in range(len(contours)):
+            hull = cv2.convexHull(contours[i])
+            hull_list.append(hull)
+
+        drawing = np.zeros((canny_output.shape[0], canny_output.shape[1], 3), dtype=np.uint8)
+        for i in range(len(contours)):
+            color = (0, 256, 0)
+            cv2.drawContours(drawing, contours, i, color)
+            cv2.drawContours(drawing, hull_list, i, color)
+        photo = self.arrayToImage(drawing)
+        self.modifiedImageView["image"] = photo
+        self.modifiedPhoto = photo
+        return drawing
 
     def sharpen(self, image):
         image = image.filter(ImageFilter.SHARPEN)
@@ -718,21 +834,44 @@ class Window:
                         key, value = option.split('=')
                         kwargs[key] = value
                     mod_image = self.dilatation(mod_image, **kwargs)
-                elif command == "contour":
-                    mod_image = self.contour(mod_image)
-                elif command == "detail":
-                    mod_image = self.detail(mod_image)
-                elif command == "edge_enhance":
-                    mod_image = self.edge_enhance(mod_image)
-                elif command == "edge_enhance_more":
-                    mod_image = self.edge_enhance_more(mod_image)
-                elif command == "emboss":
-                    mod_image = self.emboss(mod_image)
-                elif command == "find_edges":
-                    mod_image = self.find_edges(mod_image)
+                elif re.search(r'morphology\((.*)\)', command, re.I):
+                    m = re.search(r'morphology\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.morphology(mod_image, **kwargs)
+                elif re.search(r'edge_detection\((.*)\)', command, re.I):
+                    m = re.search(r'edge_detection\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.draw_edges(mod_image, **kwargs)
+                elif re.search(r'convex_hull\((.*)\)', command, re.I):
+                    m = re.search(r'convex_hull\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.draw_convex_hull(mod_image, **kwargs)
                 elif command == "sharpen":
                     mod_image = self.sharpen(mod_image)
-
 
 root = Tk()
 
