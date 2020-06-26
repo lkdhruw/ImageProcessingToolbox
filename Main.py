@@ -38,11 +38,11 @@ class Window:
         self.tasks = StringVar(root)
         self.tasks.set('Grayscale')
         tasks = OptionMenu(toolbar, self.tasks,
-                           'Grayscale', 'Binary', 'Adaptive_Threshold',
-                           'Color_Threshold',
+                           'Grayscale', 'Binary', 'Adaptive Threshold',
+                           'Color Threshold',
                            'Smooth', 'Sharp', 'Blobs', 'Filter',
                            'Erosion', 'Dilatation',
-                           'Morphology',
+                           'Morphology', 'Edges', 'Convex Hull'
                            )
         tasks.grid(row=1, column=2, padx=2, pady=1)
         self.addButton = Button(toolbar, text="Add", command=self.add_task)
@@ -138,7 +138,7 @@ class Window:
         print(hsv)
 
     def add_task(self):
-        task = self.tasks.get()
+        task = self.tasks.get().replace(' ','_')
         append_at = self.command.index('end-1c')
         if task == 'Grayscale':
             self.command.insert(append_at, task.lower() + '\n')
@@ -194,6 +194,18 @@ class Window:
                 'operation=opening',  # opening | closing | gradient | tophat | blackhat | hitmiss
                 'type=cross',  # rect | cross | ellipse
                 'ksize=5'  # 2n + 1
+            ]
+            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
+        elif task == 'Edges':
+            defaults = [
+                'operator=canny',  # opening | closing | gradient | tophat | blackhat | hitmiss
+                'ksize=5',  # 2n + 1
+                'smooth=gaussian3'
+            ]
+            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
+        elif task == 'Convex_Hull':
+            defaults = [
+
             ]
             self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
 
@@ -846,8 +858,8 @@ class Window:
                         key, value = option.split('=')
                         kwargs[key] = value
                     mod_image = self.morphology(mod_image, **kwargs)
-                elif re.search(r'edge_detection\((.*)\)', command, re.I):
-                    m = re.search(r'edge_detection\((.*)\)', command, re.I)
+                elif re.search(r'edges\((.*)\)', command, re.I):
+                    m = re.search(r'edges\((.*)\)', command, re.I)
                     command = self.encrypt_command(m.group(1))
                     command = command.replace(' ', '')
                     options = []
