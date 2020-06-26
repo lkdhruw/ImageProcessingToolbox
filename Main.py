@@ -25,6 +25,7 @@ class Window:
         master.title("Digital Image Processing")
         master.minsize(1200, 600)
         master.resizable(0, 0)
+        self.master = master
         self.filename = ""
         self.commandText = ""
 
@@ -49,7 +50,12 @@ class Window:
         self.addButton.grid(row=1, column=3, padx=2, pady=1)
         self.chooseColorButton = Button(toolbar, text="Choose Color", command=self.choose_color)
         self.chooseColorButton.grid(row=1, column=4, padx=2, pady=1)
-
+        self.camButton = Button(toolbar, text="Cam", command=self.webcam)
+        self.camButton.grid(row=1, column=5, padx=2, pady=1)
+        self.saveButton = Button(toolbar, text="Save", command=self.save_buffer)
+        self.saveButton.grid(row=1, column=6, padx=2, pady=1)
+        self.showButton = Button(toolbar, text="Show", command=self.show_buffer)
+        self.showButton.grid(row=1, column=7, padx=2, pady=1)
 
         # im = Image.open("Default.png")
         im = cv2.imread('Default.png')
@@ -60,6 +66,8 @@ class Window:
         self.cvImage = None
 
         image = self.originalImage360x360
+        self.last_modified_image = image
+        self.buffer_image = image
         # photo = self.imageToBytes(image)
         photo = self.arrayToImage(image)  # openCV to PIL image
         self.originalImageView = Label(root, width=400, height=360)
@@ -129,13 +137,15 @@ class Window:
 
     def rgb_to_hsv(self, r, g, b):
         h, s, v = colorsys.rgb_to_hsv(r/255, g/255, b/255)
-        return h*360, s*100, v*100
+        h, s, v = str(int(h*360)), str(int(s*100)), str(int(v*100))
+        return ', '.join([h, s, v])
 
     def choose_color(self):
         color = askcolor()
         r, g, b = color[0]
         hsv = self.rgb_to_hsv(r, g, b)
-        print(hsv)
+        self.master.clipboard_clear()
+        self.master.clipboard_append(hsv)
 
     def add_task(self):
         task = self.tasks.get().replace(' ','_')
@@ -208,6 +218,12 @@ class Window:
 
             ]
             self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
+
+    def save_buffer(self):
+        self.buffer_image = self.last_modified_image
+
+    def show_buffer(self):
+        cv2.imshow('Buffer image', self.buffer_image)
 
     def is_grayscale(self, image):
         return len(image.shape) < 3
@@ -653,6 +669,19 @@ class Window:
         photo = PhotoImage(data=p)
         return photo
 
+    def reframe(self, image):
+        h, w = image.shape[:2]
+        if w > h:
+            h = int(h * 360 / w)
+            w = 360
+        elif w < h:
+            w = int(w * 360 / h)
+            h = 360
+        else:
+            w = h = 360
+        image360 = cv2.resize(image, (w, h), interpolation=cv2.INTER_AREA)
+        return image360
+
     def browseimg(self):
         from tkinter.filedialog import askopenfilename
         Tk().withdraw()
@@ -661,9 +690,8 @@ class Window:
         if len(self.filename) > 0:
             img = cv2.imread(self.filename)
             self.originalImage = img
-
             # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
-            self.originalImage360x360 = cv2.resize(img, (360, 360), interpolation=cv2.INTER_AREA)
+            self.originalImage360x360 = self.reframe(img)
 
             image = self.originalImage360x360
             photo = self.arrayToImage(image)
@@ -712,7 +740,24 @@ class Window:
         print(element.get())
         print(element.name)
 
-    def applycommand(self):
+    def webcam(self):
+        cam = cv2.VideoCapture(0)
+
+        while True:
+            _, frame = cam.read()
+            self.originalImage = frame
+            self.originalImage360x360 = self.reframe(frame)
+            image = self.originalImage360x360
+            photo = self.arrayToImage(image)
+            self.originalImageView["image"] = photo
+            self.originalPhoto = photo
+            self.applycommand(update=False)
+            key = cv2.waitKey(1)
+            break
+
+        cam.release()
+
+    def applycommand(self, update=True):
         '''options = self.optionsPanel.winfo_children()
         print(options)
         for option in options:
@@ -724,14 +769,15 @@ class Window:
                 opchchs = opchild.winfo_children()
                 print(opchchs)
             option.destroy()'''
-
-        self.commandText = self.command.get(1.0, END)
+        if update:
+            self.commandText = self.command.get(1.0, END)
         inputcommand = self.commandText
         # print(self.commandText)
         commands = inputcommand.split("\n")
         # print len(commands)
         image = self.originalImage360x360
         mod_image = self.originalImage360x360
+        self.last_modified_image = mod_image
         line = 0
         for command in commands:
             line = line + 1
@@ -739,24 +785,24 @@ class Window:
                 # print command
                 if command == "grayscale":
                     mod_image = self.grayscale(mod_image)
-                    grayscale_ = Label(self.optionsPanel, text='Grayscale', padx=5, pady=5)
-                    grayscale_.grid(row=1, column=1, sticky='w')
+                    '''grayscale_ = Label(self.optionsPanel, text='Grayscale', padx=5, pady=5)
+                    grayscale_.grid(row=1, column=1, sticky='w')'''
                 elif re.search(r'quantize\((\d+)\)', command, re.I):
                     m = re.search(r'quantize\((\d+)\)', command, re.I)
                     mod_image = self.quantize(mod_image, int(float(m.group(1))))
-                    quantize = Scale(self.optionsPanel, label="Quantize", from_=2, to=8,
+                    '''quantize = Scale(self.optionsPanel, label="Quantize", from_=2, to=8,
                                      length=300, orient=HORIZONTAL)
                     quantize.grid(row=1, column=1, sticky='w')
-                    quantize.set(int(float(m.group(1))))
+                    quantize.set(int(float(m.group(1))))'''
                 elif re.search(r'binary\((\d+)\)', command, re.I):
                     m = re.search(r'binary\((\d+)\)', command, re.I)
                     mod_image = self.binary(mod_image, int(float(m.group(1))))
-                    binary = Scale(self.optionsPanel, label="Binary", from_=0, to=255,
+                    '''binary = Scale(self.optionsPanel, label="Binary", from_=0, to=255,
                                    length=300, orient=HORIZONTAL)
                     binary.grid(row=2, column=1, sticky='w')
                     binary.set(int(float(m.group(1))))
                     binary._name = str(line) + '.0,' + str(line) + "." + str(len(command))
-                    binary.bind("<B1-Motion>", lambda event, obj=binary: self.scale_move(event, obj))
+                    binary.bind("<B1-Motion>", lambda event, obj=binary: self.scale_move(event, obj))'''
                 elif re.search(r'adaptive_threshold\((.*)\)', command, re.I):
                     m = re.search(r'adaptive_threshold\((.*)\)', command, re.I)
                     command = (m.group(1)).replace(' ', '')
@@ -884,6 +930,8 @@ class Window:
                     mod_image = self.draw_convex_hull(mod_image, **kwargs)
                 elif command == "sharpen":
                     mod_image = self.sharpen(mod_image)
+
+        self.last_modified_image = mod_image
 
 root = Tk()
 
