@@ -1,3 +1,4 @@
+import threading
 from tkinter import *
 from tkinter.colorchooser import askcolor
 from PIL import Image
@@ -65,6 +66,8 @@ class Window:
         self.originalImage360x360 = cv2.resize(im, (360, 360), interpolation=cv2.INTER_AREA)
         self.cvImage = None
         self.buffers = {}
+        self.cam = None  # cv2.VideoCapture(0)
+        self.cam_capturing = False
 
         image = self.originalImage360x360
         self.last_modified_image = image
@@ -137,8 +140,8 @@ class Window:
             binaryScale.grid(row=i, column=1)'''
 
     def rgb_to_hsv(self, r, g, b):
-        h, s, v = colorsys.rgb_to_hsv(r/255, g/255, b/255)
-        h, s, v = str(int(h*360)), str(int(s*100)), str(int(v*100))
+        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        h, s, v = str(int(h * 360)), str(int(s * 100)), str(int(v * 100))
         return ', '.join([h, s, v])
 
     def choose_color(self):
@@ -149,7 +152,7 @@ class Window:
         self.master.clipboard_append(hsv)
 
     def add_task(self):
-        task = self.tasks.get().replace(' ','_')
+        task = self.tasks.get().replace(' ', '_')
         append_at = self.command.index('end-1c')
         if task == 'Grayscale':
             self.command.insert(append_at, task.lower() + '\n')
@@ -545,7 +548,7 @@ class Window:
                         kernel = kernel_  # check valid kernel
         if kernel is None:
             kernel = cv2.getStructuringElement(morph_type, (2 * kernel_size + 1, 2 * kernel_size + 1),
-                                            (kernel_size, kernel_size))
+                                               (kernel_size, kernel_size))
 
         morph_image = cv2.morphologyEx(image, operation, kernel)
         photo = self.arrayToImage(morph_image)
@@ -581,7 +584,7 @@ class Window:
             elif 'scale' in key:
                 scale = int(value)
             elif 'threshold' in key:
-                ratio:int = int(kwargs['ratio']) or ratio
+                ratio: int = int(kwargs['ratio']) or ratio
                 threshold = int(value)
                 threshold1, threshold2 = threshold, threshold * ratio
             elif 'threshold1' in key:
@@ -664,8 +667,13 @@ class Window:
             elif 'source' in key:
                 if value == 'original':
                     im = self.originalImage360x360
-            elif 'mask' in key and value == 'buffer':
-                mask = self.get_kernel(**{'name': value})
+                else:
+                    im = self.get_buffer(value)
+            elif 'mask' in key:
+                if value == 'buffer':
+                    mask = self.get_kernel(**{'name': value})
+                else:
+                    mask = self.get_buffer(value)
         original = self.originalImage360x360
         bit_image = None
         if operation == 'or':
@@ -673,9 +681,11 @@ class Window:
         elif operation == 'not':
             bit_image = cv2.bitwise_not(im, mask=mask)
         elif operation == 'and':
-            bit_image = cv2.bitwise_and(original, im, mask=image)
+            bit_image = cv2.bitwise_and(original, im, mask=mask)
         elif operation == 'xor':
             bit_image = cv2.bitwise_xor(original, im, mask=mask)
+        elif operation == 'add':
+            bit_image = cv2.add(image, im, mask=mask)
 
         photo = self.arrayToImage(bit_image)
         self.modifiedImageView["image"] = photo
@@ -767,7 +777,7 @@ class Window:
                 elif 'ones' in value:
                     size = int(str(value).replace('ones', ''))
                     kernel = np.ones((size, size), dtype=np.float32)
-                    kernel /= (size*size)
+                    kernel /= (size * size)
 
             elif 'data' in key:
                 data = str(value).replace('%44%', ',').replace('[', '').replace(']', '')
@@ -785,11 +795,9 @@ class Window:
         print(element.get())
         print(element.name)
 
-    def webcam(self):
-        cam = cv2.VideoCapture(0)
-
-        while True:
-            _, frame = cam.read()
+    def stream(self):
+        while self.cam_capturing:
+            _, frame = self.cam.read()
             self.originalImage = frame
             self.originalImage360x360 = self.reframe(frame)
             image = self.originalImage360x360
@@ -797,10 +805,21 @@ class Window:
             self.originalImageView["image"] = photo
             self.originalPhoto = photo
             self.applycommand(update=False)
-            key = cv2.waitKey(1)
-            break
 
-        cam.release()
+        self.cam.release()
+        self.cam = None
+
+    def webcam(self):
+        if self.cam is None:
+            self.cam = cv2.VideoCapture(0)
+
+        if self.cam.isOpened():
+            if self.cam_capturing:
+                self.cam_capturing = False
+            else:
+                self.cam_capturing = True
+                stream = threading.Thread(group=None, target=self.stream, name=None, args=(), kwargs={})
+                stream.start()
 
     def applycommand(self, update=True):
         '''options = self.optionsPanel.winfo_children()
@@ -996,12 +1015,9 @@ class Window:
                     self.modifiedPhoto = photo
                 elif command == "sharpen":
                     mod_image = self.sharpen(mod_image)
-
         self.last_modified_image = mod_image
 
+
 root = Tk()
-
 window = Window(root)
-
 root.mainloop()
-# root.destroy()
