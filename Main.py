@@ -64,7 +64,7 @@ class Window:
         # https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#resize
         # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
         self.originalImage360x360 = cv2.resize(im, (360, 360), interpolation=cv2.INTER_AREA)
-        self.cvImage = None
+
         self.buffers = {}
         self.cam = None  # cv2.VideoCapture(0)
         self.cam_capturing = False
@@ -132,16 +132,41 @@ class Window:
 
         self.optionsPanelCanvas.bind('<Configure>', _configure_canvas)
 
-        '''self.legend = LabelFrame(optionsPanel, text='Grayscale', padx=5, pady=5)
-        self.legend.grid(row=2, column=1)
-        for i in range(1, 6):
-            binaryScale = Scale(self.legend, label="Quantize " + str(i), from_=2, to=8, length=200,
-                                orient=HORIZONTAL)
-            binaryScale.grid(row=i, column=1)'''
+        self.hsv_range_filter = LabelFrame(optionsPanel, text='HSV range filter', padx=1, pady=1)
+        self.hsv_range_filter.grid(row=2, column=1)
+        self.hsv_low = LabelFrame(self.hsv_range_filter, text='HSV low', padx=5, pady=5)
+        self.hsv_low.grid(row=1, column=1)
+        self.h_low = Scale(self.hsv_low, label="H", from_=0, to=360, length=300,
+                           orient=HORIZONTAL)
+        self.h_low.grid(row=1, column=1)
+        self.h_low.bind("<B1-Motion>", lambda event, obj=self.h_low, name='hsv_h_low': self.scale_move(event, obj, name))
+        self.s_low = Scale(self.hsv_low, label="S", from_=0, to=255, length=300,
+                           orient=HORIZONTAL)
+        self.s_low.grid(row=2, column=1)
+        self.s_low.bind("<B1-Motion>", lambda event, obj=self.s_low, name='hsv_s_low': self.scale_move(event, obj, name))
+        self.v_low = Scale(self.hsv_low, label="V", from_=0, to=255, length=300,
+                           orient=HORIZONTAL)
+        self.v_low.grid(row=3, column=1)
+        self.v_low.bind("<B1-Motion>", lambda event, obj=self.v_low, name='hsv_v_low': self.scale_move(event, obj, name))
+
+        self.hsv_high = LabelFrame(self.hsv_range_filter, text='HSV high', padx=5, pady=5)
+        self.hsv_high.grid(row=2, column=1)
+        self.h_high = Scale(self.hsv_high, label="H", from_=0, to=360, length=300,
+                            orient=HORIZONTAL)
+        self.h_high.grid(row=1, column=1)
+        self.h_high.bind("<B1-Motion>", lambda event, obj=self.h_high, name='hsv_h_high': self.scale_move(event, obj, name))
+        self.s_high = Scale(self.hsv_high, label="S", from_=0, to=255, length=300,
+                            orient=HORIZONTAL)
+        self.s_high.grid(row=2, column=1)
+        self.s_high.bind("<B1-Motion>", lambda event, obj=self.s_high, name='hsv_s_high': self.scale_move(event, obj, name))
+        self.v_high = Scale(self.hsv_high, label="V", from_=0, to=255, length=300,
+                            orient=HORIZONTAL)
+        self.v_high.grid(row=3, column=1)
+        self.v_high.bind("<B1-Motion>", lambda event, obj=self.v_high, name='hsv_v_high': self.scale_move(event, obj, name))
 
     def rgb_to_hsv(self, r, g, b):
         h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-        h, s, v = str(int(h * 360)), str(int(s * 100)), str(int(v * 100))
+        h, s, v = str(int(h * 360)), str(int(s * 255)), str(int(v * 255))
         return ', '.join([h, s, v])
 
     def choose_color(self):
@@ -791,9 +816,26 @@ class Window:
             kernel = np.ones((5, 5), dtype=np.float32)
         return kernel
 
-    def scale_move(self, event, element: Scale):
-        print(element.get())
-        print(element.name)
+    def scale_move(self, event, element: Scale, name: str):
+        if name.startswith('hsv'):
+            h_low = self.h_low.get()
+            s_low = self.s_low.get()
+            v_low = self.v_low.get()
+            h_high = self.h_high.get()
+            s_high = self.s_high.get()
+            v_high = self.v_high.get()
+            hsv_lower = np.array([h_low, s_low, v_low])
+            hsv_higher = np.array([h_high, s_high, v_high])
+
+            hsv_image = cv2.cvtColor(self.originalImage360x360, cv2.COLOR_BGR2HSV)
+            color_threshold_mask = cv2.inRange(hsv_image, hsv_lower, hsv_higher)
+            segmented_image = cv2.bitwise_and(self.originalImage360x360,
+                                              self.originalImage360x360,
+                                              mask=color_threshold_mask
+            )
+            photo = self.arrayToImage(segmented_image)
+            self.modifiedImageView["image"] = photo
+            self.modifiedPhoto = photo
 
     def stream(self):
         while self.cam_capturing:
