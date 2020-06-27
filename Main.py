@@ -43,7 +43,7 @@ class Window:
                            'Color Threshold',
                            'Smooth', 'Sharp', 'Blobs', 'Filter',
                            'Erosion', 'Dilatation',
-                           'Morphology', 'Edges', 'Convex Hull'
+                           'Morphology', 'Edges', 'Convex Hull', 'Bitwise'
                            )
         tasks.grid(row=1, column=2, padx=2, pady=1)
         self.addButton = Button(toolbar, text="Add", command=self.add_task)
@@ -64,6 +64,7 @@ class Window:
         # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
         self.originalImage360x360 = cv2.resize(im, (360, 360), interpolation=cv2.INTER_AREA)
         self.cvImage = None
+        self.buffers = {}
 
         image = self.originalImage360x360
         self.last_modified_image = image
@@ -216,6 +217,11 @@ class Window:
         elif task == 'Convex_Hull':
             defaults = [
 
+            ]
+            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
+        elif task == 'Bitwise':
+            defaults = [
+                'operation=and'
             ]
             self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
 
@@ -647,6 +653,35 @@ class Window:
         self.modifiedPhoto = photo
         return drawing
 
+    def bitwise(self, image, **kwargs):
+        # https://docs.opencv.org/4.2.0/d0/d86/tutorial_py_image_arithmetics.html
+        operation = 'and'
+        im = image
+        mask = None
+        for key, value in kwargs.items():
+            if 'operation' in key:
+                operation = value
+            elif 'source' in key:
+                if value == 'original':
+                    im = self.originalImage360x360
+            elif 'mask' in key and value == 'buffer':
+                mask = self.get_kernel(**{'name': value})
+        original = self.originalImage360x360
+        bit_image = None
+        if operation == 'or':
+            bit_image = cv2.bitwise_or(original, im, mask=mask)
+        elif operation == 'not':
+            bit_image = cv2.bitwise_not(im, mask=mask)
+        elif operation == 'and':
+            bit_image = cv2.bitwise_and(original, im, mask=image)
+        elif operation == 'xor':
+            bit_image = cv2.bitwise_xor(original, im, mask=mask)
+
+        photo = self.arrayToImage(bit_image)
+        self.modifiedImageView["image"] = photo
+        self.modifiedPhoto = photo
+        return bit_image
+
     def sharpen(self, image):
         image = image.filter(ImageFilter.SHARPEN)
         photo = self.imageToBytes(image)
@@ -710,12 +745,21 @@ class Window:
         data = data.replace('%44%', ',')
         return data
 
+    def get_buffer(self, name: str):
+        return self.buffers[name]
+
+    def set_buffer(self, name: str, buffer):
+        self.buffers[name] = buffer
+
+    def clear_buffer(self):
+        self.buffers = {}
+
     def get_kernel(self, **kwargs):
         kernel = None
         for key, value in kwargs.items():
             if 'name' in key:
-                # get popular kernel
-                pass
+                if value == 'buffer':
+                    kernel = self.buffer_image
             elif 'type' in key:
                 if 'zeros' in value:
                     size = int(str(value).replace('zeros', ''))
@@ -724,6 +768,7 @@ class Window:
                     size = int(str(value).replace('ones', ''))
                     kernel = np.ones((size, size), dtype=np.float32)
                     kernel /= (size*size)
+
             elif 'data' in key:
                 data = str(value).replace('%44%', ',').replace('[', '').replace(']', '')
                 rows = data.split(';')
@@ -928,6 +973,27 @@ class Window:
                         key, value = option.split('=')
                         kwargs[key] = value
                     mod_image = self.draw_convex_hull(mod_image, **kwargs)
+                elif re.search(r'bitwise\((.*)\)', command, re.I):
+                    m = re.search(r'bitwise\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.bitwise(mod_image, **kwargs)
+                elif re.search(r'save\((.*)\)', command, re.I):
+                    m = re.search(r'save\((.*)\)', command, re.I)
+                    self.set_buffer(m.group(1), mod_image)
+                elif re.search(r'get\((.*)\)', command, re.I):
+                    m = re.search(r'get\((.*)\)', command, re.I)
+                    mod_image = self.get_buffer(m.group(1))
+                    photo = self.arrayToImage(mod_image)
+                    self.modifiedImageView["image"] = photo
+                    self.modifiedPhoto = photo
                 elif command == "sharpen":
                     mod_image = self.sharpen(mod_image)
 
