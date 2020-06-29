@@ -11,6 +11,7 @@ import cv2
 import binascii
 import numpy as np
 import colorsys
+import os
 
 
 class Binary:
@@ -47,6 +48,7 @@ class Window:
                            'Morphology', 'Edges', 'Convex Hull', 'Bitwise'
                            )
         tasks.grid(row=1, column=2, padx=2, pady=1)
+        tasks.configure(width=15)
         self.addButton = Button(toolbar, text="Add", command=self.add_task)
         self.addButton.grid(row=1, column=3, padx=2, pady=1)
         self.chooseColorButton = Button(toolbar, text="Choose Color", command=self.choose_color)
@@ -68,6 +70,8 @@ class Window:
         self.buffers = {}
         self.cam = None  # cv2.VideoCapture(0)
         self.cam_capturing = False
+        self.video = None
+        self.video_playing = False
 
         image = self.originalImage360x360
         self.last_modified_image = image
@@ -265,9 +269,9 @@ class Window:
     def grayscale(self, image):
         if not self.is_grayscale(image):
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        photo = self.arrayToImage(image)
+        '''photo = self.arrayToImage(image)
         self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
+        self.modifiedPhoto = photo'''
         return image
 
     def quantize(self, image, quantizeValue):
@@ -275,9 +279,6 @@ class Window:
         # an opencv image not PIL image object
         # Need to resolve
         image = image.quantize(quantizeValue)
-        photo = self.imageToBytes(image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return image
 
     def binary(self, image, threshold, thresh_type=cv2.THRESH_BINARY):
@@ -285,9 +286,6 @@ class Window:
         if not self.is_grayscale(image):
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         _, threshold_image = cv2.threshold(image, threshold, 255, thresh_type)
-        photo = self.arrayToImage(threshold_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return threshold_image
 
     def adaptive_threshold(self, image, **kwargs):
@@ -323,9 +321,6 @@ class Window:
         threshold_image = cv2.adaptiveThreshold(image, 255,
                                                 adaptive_method, thresh_type,
                                                 block_size, constant)
-        photo = self.arrayToImage(threshold_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return threshold_image
 
     def smooth(self, image, **kwargs):
@@ -370,9 +365,6 @@ class Window:
             blur_image = cv2.bilateralFilter(image, diameter, sigma_color, sigma_space)
         else:
             blur_image = cv2.blur(image, (ksizex, ksizey))
-        photo = self.arrayToImage(blur_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return blur_image
 
     def blobs(self, image, **kwargs):
@@ -432,10 +424,6 @@ class Window:
         blank = np.zeros((1, 1))
         blobs = cv2.drawKeypoints(image, keypoints, blank, draw_color,
                                   cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-
-        photo = self.arrayToImage(blobs)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return blobs
 
     def filter(self, image, **kwargs):
@@ -459,9 +447,6 @@ class Window:
                 ddepth = int(value)
 
         filter_image = cv2.filter2D(image, ddepth, kernel)
-        photo = self.arrayToImage(filter_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return filter_image
 
     def erosion(self, image, **kwargs):
@@ -482,9 +467,6 @@ class Window:
         element = cv2.getStructuringElement(erosion_type, (2 * erosion_size + 1, 2 * erosion_size + 1),
                                             (erosion_size, erosion_size))
         erosion_image = cv2.erode(image, element)
-        photo = self.arrayToImage(erosion_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return erosion_image
 
     def dilatation(self, image, **kwargs):
@@ -504,9 +486,6 @@ class Window:
         element = cv2.getStructuringElement(dilatation_type, (2 * dilatation_size + 1, 2 * dilatation_size + 1),
                                             (dilatation_size, dilatation_size))
         dilatation_image = cv2.dilate(image, element)
-        photo = self.arrayToImage(dilatation_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return dilatation_image
 
     def color_threshold(self, image, **kwargs):
@@ -526,9 +505,6 @@ class Window:
         color_threshold_mask = cv2.inRange(hsv_image, hsv_lower, hsv_higher)
         contours, _ = cv2.findContours(color_threshold_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
         # cv2.drawContours(image, contours, -1, (0, 255, 0), 3)
-        photo = self.arrayToImage(color_threshold_mask)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return color_threshold_mask
 
     def morphology(self, image, **kwargs):
@@ -576,9 +552,6 @@ class Window:
                                                (kernel_size, kernel_size))
 
         morph_image = cv2.morphologyEx(image, operation, kernel)
-        photo = self.arrayToImage(morph_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return morph_image
 
     def draw_edges(self, image, **kwargs):
@@ -654,9 +627,6 @@ class Window:
             mask = im_edges != 0
             edges = image * (mask[:, :, None].astype(image.dtype))
 
-        photo = self.arrayToImage(edges)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return edges
 
     def draw_convex_hull(self, image, **kwargs):
@@ -676,9 +646,7 @@ class Window:
             color = (0, 256, 0)
             cv2.drawContours(drawing, contours, i, color)
             cv2.drawContours(drawing, hull_list, i, color)
-        photo = self.arrayToImage(drawing)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
+
         return drawing
 
     def bitwise(self, image, **kwargs):
@@ -712,9 +680,6 @@ class Window:
         elif operation == 'add':
             bit_image = cv2.add(image, im, mask=mask)
 
-        photo = self.arrayToImage(bit_image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
         return bit_image
 
     def sharpen(self, image):
@@ -740,6 +705,8 @@ class Window:
         return photo
 
     def reframe(self, image):
+        if image is None:
+            return np.zeros((360, 360, 3), np.uint8)
         h, w = image.shape[:2]
         if w > h:
             h = int(h * 360 / w)
@@ -758,18 +725,28 @@ class Window:
         self.filename = askopenfilename()
 
         if len(self.filename) > 0:
-            img = cv2.imread(self.filename)
-            self.originalImage = img
-            # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
-            self.originalImage360x360 = self.reframe(img)
+            _, ext = os.path.splitext(self.filename)
+            image_formats = ['bmp','pbm','pgm','ppm','sr','ras','jpeg','jpg','jpe','jp2','tiff','tif','png']
+            video_formats = ['avi']
 
-            image = self.originalImage360x360
-            photo = self.arrayToImage(image)
-            self.originalImageView["image"] = photo
-            self.originalPhoto = photo
-            self.modifiedImageView["image"] = photo
-            self.modifiedPhoto = photo
-            self.applycommand()
+            if ext in image_formats:
+                img = cv2.imread(self.filename)
+                self.originalImage = img
+                # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
+                self.originalImage360x360 = self.reframe(img)
+
+                image = self.originalImage360x360
+                photo = self.arrayToImage(image)
+                self.originalImageView["image"] = photo
+                self.originalPhoto = photo
+                self.modifiedImageView["image"] = photo
+                self.modifiedPhoto = photo
+                self.applycommand()
+            else:
+                self.video = cv2.VideoCapture(self.filename)
+                self.video_playing = True
+                playback = threading.Thread(group=None, target=self.playback, name=None, args=(), kwargs={})
+                playback.start()
 
     def encrypt_command(self, data: str):
         while re.search(r'\[([^\[\]]*)(,)([^\[\]]*)\]', data):
@@ -851,6 +828,24 @@ class Window:
         self.cam.release()
         self.cam = None
 
+    def playback(self, **kwargs):
+        while self.video_playing:
+            _, frame = self.video.read()
+            if frame is None:
+                if self.video_playing is False:
+                    break
+                self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                cv2.waitKey(34)
+                continue
+            self.originalImage = frame
+            self.originalImage360x360 = self.reframe(frame)
+            image = self.originalImage360x360
+            photo = self.arrayToImage(image)
+            self.originalImageView["image"] = photo
+            self.originalPhoto = photo
+            self.applycommand(update=False)
+            cv2.waitKey(34)
+
     def webcam(self):
         if self.cam is None:
             self.cam = cv2.VideoCapture(0)
@@ -862,6 +857,11 @@ class Window:
                 self.cam_capturing = True
                 stream = threading.Thread(group=None, target=self.stream, name=None, args=(), kwargs={})
                 stream.start()
+
+    def update(self, mod_image):
+        photo = self.arrayToImage(mod_image)
+        self.modifiedImageView["image"] = photo
+        self.modifiedPhoto = photo
 
     def applycommand(self, update=True):
         '''options = self.optionsPanel.winfo_children()
@@ -1057,6 +1057,24 @@ class Window:
                     self.modifiedPhoto = photo
                 elif command == "sharpen":
                     mod_image = self.sharpen(mod_image)
+                elif re.search(r'play\((.*)\)', command, re.I):
+                    m = re.search(r'play\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    if self.video_playing is False:
+                        self.video_playing = True
+                        playback = threading.Thread(group=None, target=self.playback, name=None, args=(), kwargs={})
+                        playback.start()
+                elif command == 'stop':
+                    self.video_playing = False
+        self.update(mod_image)
         self.last_modified_image = mod_image
 
 
