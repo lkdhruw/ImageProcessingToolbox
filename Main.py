@@ -12,6 +12,7 @@ import binascii
 import numpy as np
 import colorsys
 import os
+import gc
 
 
 class Binary:
@@ -42,8 +43,8 @@ class Window:
         self.tasks.set('Grayscale')
         tasks = OptionMenu(toolbar, self.tasks,
                            'Grayscale', 'Binary', 'Adaptive Threshold',
-                           'Color Threshold',
-                           'Smooth', 'Sharp', 'Blobs', 'Filter',
+                           'Color Threshold', 'Color Adjustment'
+                           'Smooth', 'Sharpen', 'Blobs', 'Filter',
                            'Erosion', 'Dilatation',
                            'Morphology', 'Edges', 'Convex Hull', 'Bitwise'
                            )
@@ -143,30 +144,36 @@ class Window:
         self.h_low = Scale(self.hsv_low, label="H", from_=0, to=360, length=300,
                            orient=HORIZONTAL)
         self.h_low.grid(row=1, column=1)
-        self.h_low.bind("<B1-Motion>", lambda event, obj=self.h_low, name='hsv_h_low': self.scale_move(event, obj, name))
+        self.h_low.bind("<B1-Motion>",
+                        lambda event, obj=self.h_low, name='hsv_h_low': self.scale_move(event, obj, name))
         self.s_low = Scale(self.hsv_low, label="S", from_=0, to=255, length=300,
                            orient=HORIZONTAL)
         self.s_low.grid(row=2, column=1)
-        self.s_low.bind("<B1-Motion>", lambda event, obj=self.s_low, name='hsv_s_low': self.scale_move(event, obj, name))
+        self.s_low.bind("<B1-Motion>",
+                        lambda event, obj=self.s_low, name='hsv_s_low': self.scale_move(event, obj, name))
         self.v_low = Scale(self.hsv_low, label="V", from_=0, to=255, length=300,
                            orient=HORIZONTAL)
         self.v_low.grid(row=3, column=1)
-        self.v_low.bind("<B1-Motion>", lambda event, obj=self.v_low, name='hsv_v_low': self.scale_move(event, obj, name))
+        self.v_low.bind("<B1-Motion>",
+                        lambda event, obj=self.v_low, name='hsv_v_low': self.scale_move(event, obj, name))
 
         self.hsv_high = LabelFrame(self.hsv_range_filter, text='HSV high', padx=5, pady=5)
         self.hsv_high.grid(row=2, column=1)
         self.h_high = Scale(self.hsv_high, label="H", from_=0, to=360, length=300,
                             orient=HORIZONTAL)
         self.h_high.grid(row=1, column=1)
-        self.h_high.bind("<B1-Motion>", lambda event, obj=self.h_high, name='hsv_h_high': self.scale_move(event, obj, name))
+        self.h_high.bind("<B1-Motion>",
+                         lambda event, obj=self.h_high, name='hsv_h_high': self.scale_move(event, obj, name))
         self.s_high = Scale(self.hsv_high, label="S", from_=0, to=255, length=300,
                             orient=HORIZONTAL)
         self.s_high.grid(row=2, column=1)
-        self.s_high.bind("<B1-Motion>", lambda event, obj=self.s_high, name='hsv_s_high': self.scale_move(event, obj, name))
+        self.s_high.bind("<B1-Motion>",
+                         lambda event, obj=self.s_high, name='hsv_s_high': self.scale_move(event, obj, name))
         self.v_high = Scale(self.hsv_high, label="V", from_=0, to=255, length=300,
                             orient=HORIZONTAL)
         self.v_high.grid(row=3, column=1)
-        self.v_high.bind("<B1-Motion>", lambda event, obj=self.v_high, name='hsv_v_high': self.scale_move(event, obj, name))
+        self.v_high.bind("<B1-Motion>",
+                         lambda event, obj=self.v_high, name='hsv_v_high': self.scale_move(event, obj, name))
 
     def rgb_to_hsv(self, r, g, b):
         h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
@@ -207,8 +214,12 @@ class Window:
                 'filter=gaussian'
             ]
             self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Sharp':
-            self.command.insert(append_at, task.lower() + '(128)\n')
+        elif task == 'Sharpen':
+            defaults = [
+                'ksize=5',
+                'filter=gaussian'
+            ]
+            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
         elif task == 'Blobs':
             defaults = [
                 'minArea=100',
@@ -343,6 +354,7 @@ class Window:
                 ksizey = int(value)
             elif 'sigma_x' in key:
                 sigma_x = float(value)
+                sigma_y = sigma_x
             elif 'sigma_y' in key:
                 sigma_y = float(value)
             elif 'diameter' in key:
@@ -375,18 +387,6 @@ class Window:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         draw_color = (0, 255, 0)
         params = cv2.SimpleBlobDetector_Params()
-
-        # keys:
-        #       'minArea=100',
-        #       'maxArea',
-        #       'minCircularity=0.9',
-        #       'maxCircularity',
-        #       'minConvexity',
-        #       'maxConvexity',
-        #       'minInertia',
-        #       'maxInertia',
-        #       'color',
-        #       'draw_color'
         for key, value in kwargs.items():
             if 'minArea' in key:
                 params.filterByArea = True
@@ -558,7 +558,9 @@ class Window:
         # https://docs.opencv.org/4.2.0/d2/d2c/tutorial_sobel_derivatives.html
         # https://docs.opencv.org/4.2.0/d5/db5/tutorial_laplace_operator.html
         # https://docs.opencv.org/4.2.0/da/d5c/tutorial_canny_detector.html
-
+        # Other operator
+        # https://en.wikipedia.org/wiki/Prewitt_operator
+        # https://en.wikipedia.org/wiki/Kirsch_operator
         operator = 'canny'
         ddepth = -1
         ksize = 3
@@ -682,12 +684,54 @@ class Window:
 
         return bit_image
 
-    def sharpen(self, image):
-        image = image.filter(ImageFilter.SHARPEN)
-        photo = self.imageToBytes(image)
-        self.modifiedImageView["image"] = photo
-        self.modifiedPhoto = photo
-        return image
+    def sharpen(self, image, **kwargs):
+        # https://www.taylorpetrick.com/blog/post/convolution-part3#sharpen
+        # https://stackoverflow.com/a/32455269/2669814
+        blurr = self.smooth(image, **kwargs)
+        unsharp_image = cv2.addWeighted(image, 1.5, blurr, -0.5, 0, image)
+        return unsharp_image
+
+    def color_adjustment(self, image, **kwargs):
+        # https://docs.opencv.org/3.4/d3/dc1/tutorial_basic_linear_transform.html
+        contrast = 1.0
+        brightness = 0.0
+        for key, value in kwargs.items():
+            if 'contrast' in key:
+                contrast = float(value)
+            elif 'brightness' in key:
+                brightness = float(value)
+
+        if 'scurve' in kwargs:
+            points = self.get_kernel(**{'data': kwargs['scurve']})
+            corrected_image = image.copy()
+            control_points = [[0, 0], [points[0, 0], points[0, 1]], [points[1, 0], points[1, 1]], [255, 255]]
+            pts = np.array(control_points)
+            point_map = {}
+
+            def bezier(t):
+                px = pts[:, 0] * np.array([(1 - t) ** 3, 3 * t * (1 - t) ** 2, 3 * t ** 2 * (1 - t), t ** 3])
+                py = pts[:, 1] * np.array([(1 - t) ** 3, 3 * t * (1 - t) ** 2, 3 * t ** 2 * (1 - t), t ** 3])
+                point_map[int(np.sum(px))] = int(np.sum(py))
+
+            for i in range(512):
+                bezier((i / 511))
+
+            for i in range(255):
+                value_flags = image == i
+                corrected_image[value_flags] = point_map[i]
+            gc.collect()
+        elif 'zcurve' in kwargs:
+            points = self.get_kernel(**{'data': kwargs['zcurve']})
+            corrected_image = image.copy()
+            shadows_flags = image < int(points[0, 0])
+            corrected_image[shadows_flags] = 0
+            highlights_flags = image > int(points[0, 1])
+            corrected_image[highlights_flags] = 255
+
+        else:
+            corrected_image = cv2.convertScaleAbs(image, alpha=contrast, beta=brightness)
+
+        return corrected_image
 
     def arrayToImage(self, image):
         if not self.is_grayscale(image):
@@ -704,15 +748,49 @@ class Window:
         photo = PhotoImage(data=p)
         return photo
 
+    def crop(self, image, **kwargs):
+        # For now it will only crop image in 1:1 ratio
+        height, width, _ = image.shape
+        h, w = height, width
+        ratio = w / h  # W:H
+        top, left = 0, 0
+        right, bottom = 0, 0
+
+        if w > h:
+            w = h
+        elif h > w:
+            h = w
+
+        if 'top' in kwargs:
+            top = float(kwargs['top'])
+            top = int(top * height)
+            h += top
+        if 'left' in kwargs:
+            left = float(kwargs['left'])
+            left = int(left * width)
+            w += left
+        '''
+        if 'right' in kwargs:
+            right = float(kwargs['right'])
+            w -= int(right*width)
+        if 'bottom' in kwargs:
+            bottom = float(kwargs['bottom'])
+            h -= int(bottom*width)
+        '''
+
+        return self.reframe(image[top:h, left:w])
+
     def reframe(self, image):
         if image is None:
             return np.zeros((360, 360, 3), np.uint8)
         h, w = image.shape[:2]
+        h_w_ratio = h / w
+
         if w > h:
-            h = int(h * 360 / w)
+            h = int(h_w_ratio * 360)
             w = 360
         elif w < h:
-            w = int(w * 360 / h)
+            w = int(360 / h_w_ratio)
             h = 360
         else:
             w = h = 360
@@ -726,10 +804,12 @@ class Window:
 
         if len(self.filename) > 0:
             _, ext = os.path.splitext(self.filename)
-            image_formats = ['bmp','pbm','pgm','ppm','sr','ras','jpeg','jpg','jpe','jp2','tiff','tif','png']
+            ext = str(ext).replace('.', '')
+            image_formats = ['bmp', 'pbm', 'pgm', 'ppm', 'sr', 'ras', 'jpeg', 'jpg', 'jpe', 'jp2', 'tiff', 'tif', 'png']
             video_formats = ['avi']
 
-            if ext in image_formats:
+            if ext.lower() in image_formats:
+                print(['Image Object', ext])
                 img = cv2.imread(self.filename)
                 self.originalImage = img
                 # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
@@ -743,6 +823,7 @@ class Window:
                 self.modifiedPhoto = photo
                 self.applycommand()
             else:
+                print(['Video Object', ext])
                 self.video = cv2.VideoCapture(self.filename)
                 self.video_playing = True
                 playback = threading.Thread(group=None, target=self.playback, name=None, args=(), kwargs={})
@@ -809,7 +890,7 @@ class Window:
             segmented_image = cv2.bitwise_and(self.originalImage360x360,
                                               self.originalImage360x360,
                                               mask=color_threshold_mask
-            )
+                                              )
             photo = self.arrayToImage(segmented_image)
             self.modifiedImageView["image"] = photo
             self.modifiedPhoto = photo
@@ -837,6 +918,7 @@ class Window:
                 self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 cv2.waitKey(34)
                 continue
+
             self.originalImage = frame
             self.originalImage360x360 = self.reframe(frame)
             image = self.originalImage360x360
@@ -881,7 +963,6 @@ class Window:
         # print(self.commandText)
         commands = inputcommand.split("\n")
         # print len(commands)
-        image = self.originalImage360x360
         mod_image = self.originalImage360x360
         self.last_modified_image = mod_image
         line = 0
@@ -889,6 +970,20 @@ class Window:
             line = line + 1
             if len(command) > 0:
                 # print command
+                if re.search(r'crop\((.*)\)', command, re.I):
+                    m = re.search(r'crop\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    self.originalImage360x360 = self.crop(self.originalImage, **kwargs)
+                    mod_image = self.originalImage360x360
+                    self.last_modified_image = mod_image
                 if command == "grayscale":
                     mod_image = self.grayscale(mod_image)
                     '''grayscale_ = Label(self.optionsPanel, text='Grayscale', padx=5, pady=5)
@@ -1046,17 +1141,36 @@ class Window:
                         key, value = option.split('=')
                         kwargs[key] = value
                     mod_image = self.bitwise(mod_image, **kwargs)
+                elif re.search(r'color_adjustment\((.*)\)', command, re.I):
+                    m = re.search(r'color_adjustment\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.color_adjustment(mod_image, **kwargs)
                 elif re.search(r'save\((.*)\)', command, re.I):
                     m = re.search(r'save\((.*)\)', command, re.I)
                     self.set_buffer(m.group(1), mod_image)
                 elif re.search(r'get\((.*)\)', command, re.I):
                     m = re.search(r'get\((.*)\)', command, re.I)
                     mod_image = self.get_buffer(m.group(1))
-                    photo = self.arrayToImage(mod_image)
-                    self.modifiedImageView["image"] = photo
-                    self.modifiedPhoto = photo
-                elif command == "sharpen":
-                    mod_image = self.sharpen(mod_image)
+                elif re.search(r'sharpen\((.*)\)', command, re.I):
+                    m = re.search(r'sharpen\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.sharpen(mod_image, **kwargs)
                 elif re.search(r'play\((.*)\)', command, re.I):
                     m = re.search(r'play\((.*)\)', command, re.I)
                     command = self.encrypt_command(m.group(1))
@@ -1074,6 +1188,7 @@ class Window:
                         playback.start()
                 elif command == 'stop':
                     self.video_playing = False
+
         self.update(mod_image)
         self.last_modified_image = mod_image
 
