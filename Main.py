@@ -1,3 +1,4 @@
+import importlib
 import threading
 from tkinter import *
 from tkinter.colorchooser import askcolor
@@ -13,18 +14,12 @@ import numpy as np
 import colorsys
 import os
 import gc
-
-
-class Binary:
-    def __init__(self, value: int):
-        self.value = value
-
-    def command(self):
-        return 'binary th=' + str(self.value) + ''
+from modules import *
 
 
 class Window:
     def __init__(self, master):
+
         master.title("Digital Image Processing")
         master.minsize(1200, 600)
         master.resizable(0, 0)
@@ -60,7 +55,7 @@ class Window:
         self.saveButton.grid(row=1, column=6, padx=2, pady=1)
         self.showButton = Button(toolbar, text="Show", command=self.show_buffer)
         self.showButton.grid(row=1, column=7, padx=2, pady=1)
-
+        # window = Toplevel(master)
         # im = Image.open("Default.png")
         im = cv2.imread('Default.png')
         self.originalImage = im
@@ -127,14 +122,12 @@ class Window:
             if self.optionsPanel.winfo_reqwidth() != self.optionsPanelCanvas.winfo_width():
                 # update the canvas's width to fit the inner frame
                 self.optionsPanelCanvas.config(width=self.optionsPanel.winfo_reqwidth())
-
         self.optionsPanel.bind('<Configure>', _configure_frame)
 
         def _configure_canvas(event):
             if self.optionsPanel.winfo_reqwidth() != self.optionsPanelCanvas.winfo_width():
                 # update the inner frame's width to fill the canvas
                 self.optionsPanelCanvas.itemconfigure(self.panelID, width=self.optionsPanelCanvas.winfo_width())
-
         self.optionsPanelCanvas.bind('<Configure>', _configure_canvas)
 
         self.hsv_range_filter = LabelFrame(optionsPanel, text='HSV range filter', padx=1, pady=1)
