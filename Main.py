@@ -19,11 +19,11 @@ from modules import *
 
 class Window:
     def __init__(self, master):
-
         master.title("Digital Image Processing")
         master.minsize(1200, 600)
         master.resizable(0, 0)
         self.master = master
+        self.package = 'Image Processing Toolbox'
         self.filename = ""
         self.commandText = ""
 
@@ -36,13 +36,12 @@ class Window:
         self.browseButton.grid(row=1, column=1, padx=2, pady=1)
         self.tasks = StringVar(root)
         self.tasks.set('Grayscale')
-        tasks = OptionMenu(toolbar, self.tasks,
-                           'Grayscale', 'Binary', 'Adaptive Threshold',
-                           'Color Threshold', 'Color Adjustment'
-                           'Smooth', 'Sharpen', 'Blobs', 'Filter',
-                           'Erosion', 'Dilatation',
-                           'Morphology', 'Edges', 'Convex Hull', 'Bitwise'
-                           )
+        options = ['Grayscale', 'Binary', 'Adaptive Threshold',
+                   'Color Threshold', 'Color Adjustment',
+                   'Smooth', 'Sharpen', 'Blobs', 'Filter',
+                   'Erosion', 'Dilatation',
+                   'Morphology', 'Edges', 'Convex Hull', 'Bitwise']
+        tasks = OptionMenu(*(toolbar, self.tasks) + tuple(options))
         tasks.grid(row=1, column=2, padx=2, pady=1)
         tasks.configure(width=15)
         self.addButton = Button(toolbar, text="Add", command=self.add_task)
@@ -122,12 +121,14 @@ class Window:
             if self.optionsPanel.winfo_reqwidth() != self.optionsPanelCanvas.winfo_width():
                 # update the canvas's width to fit the inner frame
                 self.optionsPanelCanvas.config(width=self.optionsPanel.winfo_reqwidth())
+
         self.optionsPanel.bind('<Configure>', _configure_frame)
 
         def _configure_canvas(event):
             if self.optionsPanel.winfo_reqwidth() != self.optionsPanelCanvas.winfo_width():
                 # update the inner frame's width to fill the canvas
                 self.optionsPanelCanvas.itemconfigure(self.panelID, width=self.optionsPanelCanvas.winfo_width())
+
         self.optionsPanelCanvas.bind('<Configure>', _configure_canvas)
 
         self.hsv_range_filter = LabelFrame(optionsPanel, text='HSV range filter', padx=1, pady=1)
@@ -726,6 +727,51 @@ class Window:
 
         return corrected_image
 
+    def line_detection(self, image, **kwargs):
+
+        algorithm = 'probabilistic'
+        rho = 1
+        theta = np.pi / 180
+        threshold = 150
+        lines = None
+        srn = 0
+        stn = 0
+        min_theta = None
+        max_theta = None
+        minLineLength = 50
+        maxLineGap = 10
+        for key, value in kwargs.items():
+            if 'probabilistic' in key:
+                algorithm = value
+
+        edges = cv2.Canny(image, 50, 200, None, 3)
+        # edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
+        c_edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+        if algorithm == 'standard':
+            lines = cv2.HoughLines(edges, rho, theta, threshold, lines, srn, stn, min_theta, max_theta)
+            if lines is not None:
+                for i in range(0, len(lines)):
+                    rho = lines[i][0][0]
+                    theta = lines[i][0][1]
+                    a = np.cos(theta)
+                    b = np.sin(theta)
+                    x0 = a * rho
+                    y0 = b * rho
+                    pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * a))
+                    pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * a))
+                    cv2.line(c_edges, pt1, pt2, (0, 0, 255), 3, cv2.LINE_AA)
+
+        else:
+            linesP = cv2.HoughLinesP(edges,rho=rho, theta=theta, threshold=threshold, lines=lines,
+                                     minLineLength=minLineLength,maxLineGap= maxLineGap)
+            if linesP is not None:
+                for i in range(0, len(linesP)):
+                    l = linesP[i][0]
+                    cv2.line(c_edges, (l[0], l[1]), (l[2], l[3]), (0, 0, 255), 3, cv2.LINE_AA)
+
+        lined_image = c_edges
+        return lined_image
+
     def arrayToImage(self, image):
         if not self.is_grayscale(image):
             b, g, r = cv2.split(image)
@@ -1110,6 +1156,18 @@ class Window:
                         key, value = option.split('=')
                         kwargs[key] = value
                     mod_image = self.draw_edges(mod_image, **kwargs)
+                elif re.search(r'lines\((.*)\)', command, re.I):
+                    m = re.search(r'lines\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    mod_image = self.line_detection(mod_image, **kwargs)
                 elif re.search(r'convex_hull\((.*)\)', command, re.I):
                     m = re.search(r'convex_hull\((.*)\)', command, re.I)
                     command = self.encrypt_command(m.group(1))
