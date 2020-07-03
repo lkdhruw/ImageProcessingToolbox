@@ -16,14 +16,14 @@ from modules.features import Features
 
 class Window:
     def __init__(self, master):
-
-        master.title("Digital Image Processing")
+        self.package = 'Image Processing Toolbox'
+        master.title("Image Processing Toolbox")
         master.minsize(1200, 600)
         master.resizable(0, 0)
         self.master = master
-        self.package = 'Image Processing Toolbox'
         self.filename = ""
         self.commandText = ""
+        self.features = {feature['name']: feature for feature in Features.collection}
 
         # toolbar = Frame(root)
         # toolbar.grid(row=1, column=1)
@@ -33,12 +33,9 @@ class Window:
         self.browseButton = Button(toolbar, text="Browse", command=self.browseimg)
         self.browseButton.grid(row=1, column=1, padx=2, pady=1)
         self.tasks = StringVar(root)
-        self.tasks.set('Grayscale')
-        options = ['Grayscale', 'Binary', 'Adaptive Threshold',
-                   'Color Threshold', 'Color Adjustment',
-                   'Smooth', 'Sharpen', 'Blobs', 'Filter',
-                   'Erosion', 'Dilatation',
-                   'Morphology', 'Edges', 'Convex Hull', 'Bitwise']
+
+        options = [feature['name'] for feature in Features.collection if feature['menu_tree']]
+        self.tasks.set(options[0])
         tasks = OptionMenu(*(toolbar, self.tasks) + tuple(options))
         tasks.grid(row=1, column=2, padx=2, pady=1)
         tasks.configure(width=15)
@@ -59,7 +56,8 @@ class Window:
         # https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#resize
         # self.originalImage480x480 = cv2.resize(im, (480, 480), interpolation=cv2.INTER_AREA)
         self.originalImage360x360 = cv2.resize(im, (360, 360), interpolation=cv2.INTER_AREA)
-
+        Features.original_image_360 = self.originalImage360x360
+        Features.modified_image_360 = self.originalImage360x360
         self.buffers = {}
         self.cam = None  # cv2.VideoCapture(0)
         self.cam_capturing = False
@@ -180,85 +178,13 @@ class Window:
         self.master.clipboard_append(hsv)
 
     def add_task(self):
-        task = self.tasks.get().replace(' ', '_')
+        task = self.tasks.get()
         append_at = self.command.index('end-1c')
-        if task == 'Grayscale':
-            self.command.insert(append_at, task.lower() + '\n')
-        elif task == 'Binary':
-            self.command.insert(append_at, task.lower() + '(128)\n')
-        elif task == 'Adaptive_Threshold':
-            defaults = [
-                'adaptive_method=gaussian',
-                'block_size=11',
-                'constant=2',
-                'threshold_type=binary'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Color_Threshold':
-            defaults = [
-                'hsv_lower=[]',
-                'hsv_higher=[]'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Smooth':
-            defaults = [
-                'ksize=5',
-                'filter=gaussian'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Sharpen':
-            defaults = [
-                'ksize=5',
-                'filter=gaussian'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Blobs':
-            defaults = [
-                'minArea=100',
-                'minCircularity=0.9'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Filter':
-            defaults = [
-                'kernel=ones5'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Erosion':
-            defaults = [
-                'size=3',
-                'type=cross'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Dilatation':
-            defaults = [
-                'size=3',
-                'type=cross'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Morphology':
-            defaults = [
-                'operation=opening',  # opening | closing | gradient | tophat | blackhat | hitmiss
-                'type=cross',  # rect | cross | ellipse
-                'ksize=5'  # 2n + 1
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Edges':
-            defaults = [
-                'operator=canny',  # opening | closing | gradient | tophat | blackhat | hitmiss
-                'ksize=5',  # 2n + 1
-                'smooth=gaussian3'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Convex_Hull':
-            defaults = [
 
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
-        elif task == 'Bitwise':
-            defaults = [
-                'operation=and'
-            ]
-            self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
+        params = self.features[task]['parameters']
+        defaults = [key + '= ' + val for key, val in params.items()]
+        task = task.replace(' ', '_')
+        self.command.insert(append_at, task.lower() + '(' + ', '.join(defaults) + ')\n')
 
     def save_buffer(self):
         self.buffer_image = self.last_modified_image
@@ -760,8 +686,8 @@ class Window:
                     cv2.line(c_edges, pt1, pt2, (0, 0, 255), 3, cv2.LINE_AA)
 
         else:
-            linesP = cv2.HoughLinesP(edges,rho=rho, theta=theta, threshold=threshold, lines=lines,
-                                     minLineLength=minLineLength,maxLineGap= maxLineGap)
+            linesP = cv2.HoughLinesP(edges, rho=rho, theta=theta, threshold=threshold, lines=lines,
+                                     minLineLength=minLineLength, maxLineGap=maxLineGap)
             if linesP is not None:
                 for i in range(0, len(linesP)):
                     l = linesP[i][0]
