@@ -1,24 +1,22 @@
-import importlib
 import threading
 from tkinter import *
 from tkinter.colorchooser import askcolor
 from PIL import Image
-from PIL import ImageFilter
 from PIL import ImageTk
-import colorsys
 import io
 import re
+import os
 import cv2
-import binascii
 import numpy as np
 import colorsys
-import os
 import gc
 from modules import *
+from modules.features import Features
 
 
 class Window:
     def __init__(self, master):
+
         master.title("Digital Image Processing")
         master.minsize(1200, 600)
         master.resizable(0, 0)

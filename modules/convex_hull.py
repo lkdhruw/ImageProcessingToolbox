@@ -9,8 +9,8 @@ def func(image):
 
 feature = {
     'menu_tree': True,  # Optional, True|False, default: True
-    'name': 'Binary',  # This name will be displayed on the menu of set True
-    'function_name': 'binary',  # Optional, str, default: <name>
+    'name': 'Convex Hull',  # This name will be displayed on the menu of set True
+    'function_name': 'convex_hull',  # Optional, str, default: <name>
     'function': func
 }
 
