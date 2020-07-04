@@ -1,12 +1,10 @@
 import re
 import cv2
 import numpy as np
+from modules.images import Images
 
 
 class Features:
-    buffer = {}
-    original_image_360 = None
-    modified_image_360 = None
     collection = []
 
     @staticmethod
@@ -37,18 +35,18 @@ class Features:
 
     @staticmethod
     def get_buffer(name: str):
-        return Features.buffer[name]
+        return Images.buffer[name]
 
     @staticmethod
     def set_buffer(name: str, data):
-        Features.buffer[name] = data
+        Images.buffer[name] = data
 
     @staticmethod
-    def clear_buffer(self):
-        Features.buffer = {}
+    def clear_buffer():
+        Images.buffer = {}
 
     @staticmethod
-    def get_kernel(self, **kwargs):
+    def get_kernel(**kwargs):
         kernel = None
 
         if 'name' in kwargs or 'type' in kwargs:

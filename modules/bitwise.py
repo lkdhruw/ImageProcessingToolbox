@@ -1,4 +1,5 @@
 from modules.features import Features
+from modules.images import Images
 import cv2
 
 
@@ -7,18 +8,18 @@ def func(image, **kwargs):
 
     operation = kwargs['operation'] if 'operation' in kwargs else 'and'
 
-    source1 = Features.original_image_360
+    source1 = Images.original_image_360
     source2 = image
     if 'source1' in kwargs:
         value = kwargs['source1']
         if value == 'original':
-            source1 = Features.original_image_360
+            source1 = Images.original_image_360
         else:
             source1 = Features.get_buffer(value)
     if 'source' in kwargs or 'source2' in kwargs:
         value = kwargs['source'] if 'source' in kwargs else kwargs['source2']
         if value == 'original':
-            source2 = Features.original_image_360
+            source2 = Images.original_image_360
         else:
             source2 = Features.get_buffer(value)
 
