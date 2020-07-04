@@ -242,6 +242,22 @@ class Window:
 
         return self.reframe(image[top:h, left:w])
 
+    def split(self, **kwargs):
+        image = self.originalImage
+        filename, ext = os.path.splitext(self.filename)
+        rows = int(kwargs['rows']) if 'rows' in kwargs else 2
+        columns = int(kwargs['columns']) if 'columns' in kwargs else 2
+        height, width = image.shape[:2]
+        h, w = int(height / rows), int(width / columns)
+        h0 = 0
+        for r in range(rows):
+            w0 = 0
+            for c in range(columns):
+                Features.set_buffer('split_' + str(r) + '_' + str(c),
+                                    image[h0:np.clip(h0 + h, 0, height), w0:np.clip(w0 + w, 0, width)])
+                w0 += w
+            h0 += h
+
     def reframe(self, image):
         if image is None:
             return np.zeros((360, 360, 3), np.uint8)
@@ -404,9 +420,16 @@ class Window:
                 stream.start()
 
     def update(self, mod_image):
+        Images.modified_image_360 = mod_image
         photo = self.arrayToImage(mod_image)
         self.modifiedImageView["image"] = photo
         self.modifiedPhoto = photo
+
+    def update_original(self, image):
+        Images.original_image_360 = image
+        photo = self.arrayToImage(image)
+        self.originalImageView["image"] = photo
+        self.originalPhoto = photo
 
     def applycommand(self, update=True):
         if update:
@@ -438,7 +461,7 @@ class Window:
                             key, value = option.split('=')
                             kwargs[key] = value
                         callable_fun = feature['function']
-                        mod_image = callable_fun(mod_image, **kwargs)
+                        mod_image = callable_fun(mod_image.copy(), **kwargs)
                 elif re.search(r'crop\((.*)\)', command, re.I):
                     m = re.search(r'crop\((.*)\)', command, re.I)
                     command = self.encrypt_command(m.group(1))
@@ -451,13 +474,29 @@ class Window:
                         key, value = option.split('=')
                         kwargs[key] = value
                     mod_image = Images.original_image_360 = self.crop(self.originalImage, **kwargs)
-
+                elif re.search(r'split\((.*)\)', command, re.I):
+                    m = re.search(r'split\((.*)\)', command, re.I)
+                    command = self.encrypt_command(m.group(1))
+                    command = command.replace(' ', '')
+                    options = []
+                    if not command == '':
+                        options = command.split(',')
+                    kwargs = {}
+                    for option in options:
+                        key, value = option.split('=')
+                        kwargs[key] = value
+                    self.split(**kwargs)
                 elif re.search(r'save\((.*)\)', command, re.I):
                     m = re.search(r'save\((.*)\)', command, re.I)
                     Images.buffer[m.group(1)] = mod_image
                 elif re.search(r'get\((.*)\)', command, re.I):
                     m = re.search(r'get\((.*)\)', command, re.I)
                     mod_image = Images.buffer[m.group(1)]
+                elif re.search(r'set\((.*)\)', command, re.I):
+                    m = re.search(r'set\((.*)\)', command, re.I)
+                    im = Images.buffer[m.group(1)]
+                    self.update_original(im)
+                    self.update(im)
                 elif re.search(r'play\((.*)\)', command, re.I):
                     m = re.search(r'play\((.*)\)', command, re.I)
                     command = self.encrypt_command(m.group(1))
