@@ -247,6 +247,7 @@ class Window:
         filename, ext = os.path.splitext(self.filename)
         rows = int(kwargs['rows']) if 'rows' in kwargs else 2
         columns = int(kwargs['columns']) if 'columns' in kwargs else 2
+        grouped = kwargs['columns'] if 'columns' in kwargs else 'split'
         height, width = image.shape[:2]
         h, w = int(height / rows), int(width / columns)
         h0 = 0

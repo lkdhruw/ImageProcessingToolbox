@@ -10,10 +10,17 @@ def func(image, **kwargs):
     # https://docs.opencv.org/3.4/d3/dc0/group__imgproc__shape.html#ga95f5b48d01abc7c2e0732db24689837b
     # https://docs.opencv.org/3.4/d3/dc0/group__imgproc__shape.html#ga4303f45752694956374734a03c54d5ff
 
+    threshold = int(kwargs['threshold']) if 'threshold' in kwargs else 50
+    threshold1 = int(kwargs['threshold1']) if 'threshold1' in kwargs else threshold
+    threshold2 = int(kwargs['threshold2']) if 'threshold2' in kwargs else np.clip(3*threshold1, 0, 255)
+
     if 'mask' in kwargs:
         mask = Features.get_buffer(kwargs['mask'])
     else:
-        mask = binary(image, **kwargs)
+        # mask = binary(image, **kwargs)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        mask = cv2.Canny(gray, threshold1, threshold2, apertureSize=5, L2gradient=True)
+
     mode = cv2.RETR_LIST
     if 'mode' in kwargs:
         value = kwargs['mode']
@@ -39,6 +46,9 @@ def func(image, **kwargs):
             method = cv2.CHAIN_APPROX_TC89_L1
 
     contours, hierarchy = cv2.findContours(mask, mode, method)
+    cv2.drawContours(image, contours, -1, (0, 255, 0), 2)
+    return image
+    pass
     cnt = contours[0]
     # Moment
     moment = cv2.moments(cnt)
@@ -54,7 +64,7 @@ def func(image, **kwargs):
         k = cv2.isContourConvex(cnt)
         #  Bounding Rectangle
         x, y, w, h = cv2.boundingRect(cnt)
-        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
     else:
         kwargs['shape'] = 'line'
     # Fit rotated rectangle, circle, ellipse, and line
@@ -87,7 +97,7 @@ feature = {
     'function_name': 'contours',  # Optional, str, default: <name>
     'function': func,
     'parameters': {
-        'threshold': 150,
+        'threshold': 50,
         'shape': 'circle'
     }  # Optional, default parameters appended at the begging
 }

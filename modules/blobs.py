@@ -11,7 +11,6 @@ def func(image, **kwargs):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     params = cv2.SimpleBlobDetector_Params()
-
     if 'minThreshold' in kwargs:
         params.minThreshold = int(float(kwargs['minThreshold']))
     if 'maxThreshold' in kwargs:
@@ -42,7 +41,7 @@ def func(image, **kwargs):
         params.maxInertiaRatio = int(float(kwargs['maxInertia']))
     if 'color' in kwargs:
         params.filterByColor = True
-        params.blobColor = Features.str_to_tuple(kwargs['color'])
+        params.blobColor = int(kwargs['color'])
 
     draw_color = (Features.str_to_tuple(kwargs['draw_color'])) if 'draw_color' in kwargs else (0, 255, 0)
 

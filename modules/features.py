@@ -13,7 +13,7 @@ class Features:
 
     @staticmethod
     def str_to_tuple(string: str, dtype='int'):
-        string = string.replace('[', '').replace(']', '')
+        string = Features.decrypt_command(string).replace('[', '').replace(']', '')
         if dtype == 'string':
             nparray = np.array(string.split(','), dtype=np.str)
         elif dtype == 'float':
